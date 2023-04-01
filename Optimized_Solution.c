@@ -133,5 +133,5 @@ int main(int argc, char *argv[]) {
     delete [] vec; 
     delete [] new_vec;
     cublasDestroy(handle);
-    return 0;
+    return 0;  
 }
