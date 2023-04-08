@@ -2,7 +2,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cublas_v2.h>
-
+#include <openacc.h>
 #define IDX2C(i,j,ld) (((j)*(ld))+(i)) //x, y  
 
 #pragma acc routine seq
@@ -70,6 +70,10 @@ int main(int argc, char *argv[]) {
             vec[IDX2C(n - 1, i, n)] = steps(n, i, vec[IDX2C(n - 1, 0, n)],
                                                   vec[IDX2C(n - 1, n - 1, n)]);
         }
+        vec[IDX2C(1, 1, n)] = (vec[IDX2C(0, 0, n)] + vec[IDX2C(0, 1, n)] + vec[IDX2C(1, 0, n)])/ 3;
+        vec[IDX2C(n - 2, 1, n)]= (vec[IDX2C(n - 1 , 0, n)] + vec[IDX2C(n -  2, 0, n)] + vec[IDX2C(n - 1, 1, n)])/ 3;;
+        vec[IDX2C(n - 2, n - 2, n)] = (vec[IDX2C(n - 1, n - 1, n)] + vec[IDX2C(n - 2, n - 1, n)] + vec[IDX2C(n - 1, n - 2, n)])/ 3;
+        vec[IDX2C(1, n - 2, n)] = (vec[IDX2C(0, n - 1, n)] + vec[IDX2C(0, n - 2, n)] + vec[IDX2C(1, n - 1, n)])/ 3;
 //Копирование основного вектора в дополнительные
 #pragma acc parallel loop collapse(2)
         for (size_t i = 0; i < n; ++i)
@@ -86,7 +90,7 @@ int main(int argc, char *argv[]) {
 #pragma acc kernels
             max_error = 0;          
             it++;
-#pragma acc parallel loop collapse(2) independent//present(new_vec[:n*n], vec[:n*n]) 
+#pragma acc parallel loop collapse(2) present(new_vec[:n*n], vec[:n*n]) 
             for (int j = 1; j < n - 1; ++j)
             {
                 for (int k = 1; k < n - 1; ++k)
@@ -96,15 +100,27 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-#pragma acc parallel loop collapse(2) independent
-	        for (int j = 1; j < n - 1; ++j) 
-                for (int k = 1; k < n - 1; ++k) 
-                    vec[IDX2C(k, j, n)] = new_vec[IDX2C(k, j, n)];
+// #pragma acc parallel loop collapse(2) independent
+// 	        for (int j = 1; j < n - 1; ++j) 
+//                 for (int k = 1; k < n - 1; ++k) 
+//                     vec[IDX2C(k, j, n)] = new_vec[IDX2C(k, j, n)];
+        // acc_memcpy_device(acc_deviceptr(vec), acc_deviceptr(new_vec), n * n * sizeof(double));
 
+
+
+        double* swap = vec;
+        vec = new_vec;
+        new_vec = vec;
+
+        acc_attach((void**)vec);
+        acc_attach((void**)new_vec);
 #pragma acc data present(tmp[:n*n], vec[:n*n], new_vec[:n*n])
                 {
 #pragma acc host_data use_device(new_vec, vec, tmp)
                     {
+                    // status = cublasDcopy(handle, n*n, new_vec, 1, vec, 1);
+                    // //                     // if (status != CUBLAS_STATUS_SUCCESS) 
+					// // 					// 	         std::cout<<"failed_3";
                     status = cublasDaxpy(handle, n*n, &a, new_vec, 1, tmp, 1);
                                         // if (status != CUBLAS_STATUS_SUCCESS) 
 										// 	        std::cout<<"failed_1";
@@ -122,13 +138,14 @@ int main(int argc, char *argv[]) {
             }
         }
     }
+
     std::cout<<"Error: "<<max_error<<std::endl;
     auto end = std::chrono::steady_clock::now();
     auto elapsed_ms = std::chrono::duration_cast<std::chrono::microseconds>(end-begin);
     std::cout<<"time: "<<elapsed_ms.count()<<" mcs\n";
     std::cout<<"Iterations: "<<it<<std::endl;
 
-    print_matrix(vec, n);
+    //print_matrix(vec, n);
     delete [] tmp; 
     delete [] vec; 
     delete [] new_vec;
