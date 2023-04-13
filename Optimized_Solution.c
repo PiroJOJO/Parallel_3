@@ -57,7 +57,7 @@ int main(int argc, char *argv[]) {
     vec[IDX2C(n - 1, n - 1, n)] = 30;
     vec[IDX2C(0, n - 1, n)] = 20;
 
-#pragma acc data copyout(new_vec[0:n*n], tmp[0:n*n]) copy(vec[0:n*n], max_error, max_idx, a) //Переносим занчения на видеокарту
+#pragma acc data create(new_vec[0:n*n], tmp[0:n*n]) copy(vec[0:n*n]) copyin(max_error, max_idx, a) //Переносим занчения на видеокарту
     {
         //Заполнение рамок матриц
 #pragma acc parallel loop independent//Создание ядра для распарреллеливания цикла
@@ -105,13 +105,7 @@ int main(int argc, char *argv[]) {
 //         acc_memcpy_device(acc_deviceptr(vec), acc_deviceptr(new_vec), n * n * sizeof(double));
 
 
-//Обмен между массивами с старыми значенями и с новыми через указатель
-        double* swap = vec;
-        vec = new_vec;
-        new_vec = swap;
 
-        acc_attach((void**)vec);
-        acc_attach((void**)new_vec);
 //Реализация редукции с помощью блиблиотеки cuBlas
 #pragma acc data present(tmp[:n*n], vec[:n*n], new_vec[:n*n], max_idx, a)
                 {
@@ -130,6 +124,12 @@ int main(int argc, char *argv[]) {
                                         // if (status != CUBLAS_STATUS_SUCCESS) 
 										// 	         std::cout<<"failed_3";
                     }
+        //Обмен между массивами с старыми значенями и с новыми через указатель
+        std::swap(vec, new_vec);
+
+        acc_attach((void**)&vec);
+        acc_attach((void**)&new_vec);
+
 #pragma acc update host(max_error)//Обновляем занчения на CPU
             }
         }
