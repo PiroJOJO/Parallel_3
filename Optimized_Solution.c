@@ -57,7 +57,7 @@ int main(int argc, char *argv[]) {
     vec[IDX2C(n - 1, n - 1, n)] = 30;
     vec[IDX2C(0, n - 1, n)] = 20;
 
-#pragma acc data create(new_vec[0:n*n], tmp[0:n*n]) copy(vec[0:n*n]) copyin(max_error, max_idx, a) //Переносим занчения на видеокарту
+#pragma acc data create(tmp[0:n*n]) copy(new_vec[0:n*n], vec[0:n*n], max_error) copyin(n, max_idx, a) //Переносим занчения на видеокарту
     {
         //Заполнение рамок матриц
 #pragma acc parallel loop independent//Создание ядра для распарреллеливания цикла
@@ -84,9 +84,7 @@ int main(int argc, char *argv[]) {
         }
 //Цикл основного алгоритма 
         while(error < max_error && it < iter)
-	    { 
-#pragma acc kernels //Использование переменной на графический процессор   
-            max_error = 0;          
+	    {        
             it++;
 #pragma acc parallel loop collapse(2) present(new_vec[:n*n], vec[:n*n]) //Распараллеливание двойного цикла 
             for (int j = 1; j < n - 1; ++j)
@@ -98,18 +96,12 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-// #pragma acc parallel loop collapse(2) independent
-// 	        for (int j = 1; j < n - 1; ++j) 
-//                 for (int k = 1; k < n - 1; ++k) 
-//                     vec[IDX2C(k, j, n)] = new_vec[IDX2C(k, j, n)];
-//         acc_memcpy_device(acc_deviceptr(vec), acc_deviceptr(new_vec), n * n * sizeof(double));
-
-
-
+        if (it % n == 0)
+        {
 //Реализация редукции с помощью блиблиотеки cuBlas
 #pragma acc data present(tmp[:n*n], vec[:n*n], new_vec[:n*n], max_idx, a)
                 {
-#pragma acc host_data use_device(new_vec, vec, tmp, max_idx, a) //Передача адреса переменных на графическом процессоре 
+#pragma acc host_data use_device(new_vec, vec, tmp,  max_idx, a) //Передача адреса переменных на графическом процессоре 
                     {
                     cublasDaxpy(handle, n*n, &a, new_vec, 1, tmp, 1);//Вычисляем разницу между новой и старой матрицей
                                         // if (status != CUBLAS_STATUS_SUCCESS) 
@@ -124,14 +116,16 @@ int main(int argc, char *argv[]) {
                                         // if (status != CUBLAS_STATUS_SUCCESS) 
 										// 	         std::cout<<"failed_3";
                     }
-        //Обмен между массивами с старыми значенями и с новыми через указатель
+                }
+        }
+
+         //Обмен между массивами с старыми значенями и с новыми через указатель
         std::swap(vec, new_vec);
 
         acc_attach((void**)&vec);
         acc_attach((void**)&new_vec);
 
-#pragma acc update host(max_error)//Обновляем занчения на CPU
-            }
+        #pragma acc update host(max_error)//Обновляем занчения на CPU
         }
     }
 
@@ -141,7 +135,7 @@ int main(int argc, char *argv[]) {
     std::cout<<"time: "<<elapsed_ms.count()<<" mcs\n";
     std::cout<<"Iterations: "<<it<<std::endl;
 
-    print_matrix(vec, n);
+    //print_matrix(vec, n);
     delete [] tmp; 
     delete [] vec; 
     delete [] new_vec;
