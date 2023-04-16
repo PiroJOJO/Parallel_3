@@ -135,7 +135,7 @@ int main(int argc, char *argv[]) {
     std::cout<<"time: "<<elapsed_ms.count()<<" mcs\n";
     std::cout<<"Iterations: "<<it<<std::endl;
 
-    //print_matrix(vec, n);
+     //print_matrix(vec, n);
     delete [] tmp; 
     delete [] vec; 
     delete [] new_vec;
