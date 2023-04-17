@@ -117,6 +117,8 @@ int main(int argc, char *argv[]) {
 										// 	         std::cout<<"failed_3";
                     }
                 }
+        #pragma acc update host(max_error)//Обновляем занчения на CPU
+
         }
 
          //Обмен между массивами с старыми значенями и с новыми через указатель
@@ -125,7 +127,6 @@ int main(int argc, char *argv[]) {
         acc_attach((void**)&vec);
         acc_attach((void**)&new_vec);
 
-        #pragma acc update host(max_error)//Обновляем занчения на CPU
         }
     }
 
@@ -135,7 +136,7 @@ int main(int argc, char *argv[]) {
     std::cout<<"time: "<<elapsed_ms.count()<<" mcs\n";
     std::cout<<"Iterations: "<<it<<std::endl;
 
-     //print_matrix(vec, n);
+    //print_matrix(vec, n);
     delete [] tmp; 
     delete [] vec; 
     delete [] new_vec;
